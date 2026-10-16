@@ -1,0 +1,14 @@
+node_modules
+.env
+.env.local
+dist
+build
+.DS_Store
+*.log
+*.sqlite
+*.sqlite-journal
+*.sqlite3
+server/sensorhub.sqlite
+server/sensorhub.sqlite-journal
+server/sensorhub.sqlite-shm
+server/sensorhub.sqlite-wal

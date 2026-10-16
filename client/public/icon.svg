@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="hubGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#06b6d4" />
+      <stop offset="50%" stop-color="#3b82f6" />
+      <stop offset="100%" stop-color="#8b5cf6" />
+    </linearGradient>
+    <linearGradient id="glowGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#22d3ee" stop-opacity="0.8" />
+      <stop offset="100%" stop-color="#06b6d4" stop-opacity="0.2" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="128" fill="#0a0f1d"/>
+  <circle cx="256" cy="256" r="180" fill="none" stroke="url(#glowGrad)" stroke-width="8" stroke-dasharray="12 12" />
+  <circle cx="256" cy="256" r="120" fill="none" stroke="url(#hubGrad)" stroke-width="12" />
+  <circle cx="256" cy="256" r="36" fill="url(#hubGrad)" />
+  <!-- Satellite nodes representing sensors -->
+  <circle cx="256" cy="136" r="18" fill="#06b6d4" />
+  <line x1="256" y1="154" x2="256" y2="220" stroke="#06b6d4" stroke-width="6" />
+  <circle cx="360" cy="256" r="18" fill="#3b82f6" />
+  <line x1="342" y1="256" x2="292" y2="256" stroke="#3b82f6" stroke-width="6" />
+  <circle cx="256" cy="376" r="18" fill="#8b5cf6" />
+  <line x1="256" y1="358" x2="256" y2="292" stroke="#8b5cf6" stroke-width="6" />
+  <circle cx="152" cy="256" r="18" fill="#10b981" />
+  <line x1="170" y1="256" x2="220" y2="256" stroke="#10b981" stroke-width="6" />
+</svg>

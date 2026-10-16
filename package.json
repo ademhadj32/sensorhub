@@ -1,0 +1,20 @@
+{
+  "name": "sensorhub",
+  "version": "1.0.0",
+  "description": "Plateforme IoT SensorHub pour microcontrôleur ESP32",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "concurrently -n \"SERVER,CLIENT\" -c \"cyan,magenta\" \"npm run server\" \"npm run client\"",
+    "server": "npm run start --prefix server",
+    "client": "npm run dev --prefix client",
+    "build": "npm run build --prefix client",
+    "seed": "npm run seed --prefix server",
+    "simulate": "npm run simulate --prefix server",
+    "install:all": "npm install && npm install --prefix server && npm install --prefix client"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}
