@@ -31,6 +31,21 @@ export function AppProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const eventSourceRef = useRef(null);
 
+  // Ajout de toast (déclaré en premier pour être accessible par les handlers)
+  const addToast = useCallback((toast) => {
+    const id = Date.now() + Math.random().toString(36).substring(2, 6);
+    const newToast = { id, type: 'info', ...toast };
+    setToasts(prev => [...prev, newToast]);
+
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 5000);
+  }, []);
+
+  const removeToast = useCallback((id) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  }, []);
+
   // Sécurité & Protection mot de passe (ademadem)
   const [isSecurityUnlocked, setIsSecurityUnlocked] = useState(() => {
     return sessionStorage.getItem('sensorhub_sec_unlocked') === 'true';
@@ -97,21 +112,6 @@ export function AppProvider({ children }) {
   const toggleTheme = () => {
     setTheme(prev => (prev === 'dark' ? 'light' : 'dark'));
   };
-
-  // Ajout de toast
-  const addToast = useCallback((toast) => {
-    const id = Date.now() + Math.random().toString(36).substring(2, 6);
-    const newToast = { id, type: 'info', ...toast };
-    setToasts(prev => [...prev, newToast]);
-
-    setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, 5000);
-  }, []);
-
-  const removeToast = useCallback((id) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  }, []);
 
   // Web Notifications du navigateur
   const requestNotificationPermission = useCallback(async () => {
