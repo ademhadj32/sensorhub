@@ -1,87 +1,107 @@
 /*
   ====================================================================================
   Projet       : SensorHub - Firmware ESP32 (Hub Capteurs & Actionneurs)
-  Description  : Surveillance environnementale multi-capteurs en temps réel & contrôle servomoteur
-  Protocoles   : Double protocole HYBRIDE HTTP REST + MQTT
-  Matériel     : ESP32 DevKit v1, DHT11/DHT22 (T°/Hum), MQ-2/MQ-135 (Gaz), Capteur d'eau, Servomoteur, LED
-  Auteur       : SensorHub Team
-  Date         : 2026
+  Description  : Surveillance environnementale multi-capteurs en temps réel &
+  contrôle servomoteur Protocoles   : Double protocole HYBRIDE HTTP REST + MQTT
+  Matériel     : ESP32 DevKit v1, DHT11/DHT22 (T°/Hum), MQ-2/MQ-135 (Gaz),
+  Capteur d'eau, Servomoteur, LED Auteur       : SensorHub Team Date         :
+  2026
   ====================================================================================
 
-  BIBLIOTHÈQUES NÉCESSAIRES (à installer via le Gestionnaire de bibliothèques Arduino) :
+  BIBLIOTHÈQUES NÉCESSAIRES (à installer via le Gestionnaire de bibliothèques
+  Arduino) :
   1. ArduinoJson (par Benoît Blanchon) - Version 6 ou 7
   2. DHT sensor library (par Adafruit)
   3. Adafruit Unified Sensor (dépendance requise par DHT)
-  4. ESP32Servo (par Kevin Harrington) - Pour piloter le servomoteur sans timer bloquant
+  4. ESP32Servo (par Kevin Harrington) - Pour piloter le servomoteur sans timer
+  bloquant
   5. PubSubClient (par Nick O'Leary) - Pour le protocole MQTT ultra-rapide
-  6. WiFi et HTTPClient (incluses par défaut dans le package ESP32 de l'Arduino IDE)
+  6. WiFi et HTTPClient (incluses par défaut dans le package ESP32 de l'Arduino
+  IDE)
 
   CÂBLAGE RECOMMANDÉ :
-  - DHT11 / DHT22 : VCC -> 3.3V, GND -> GND, DATA -> GPIO 4 (avec résistance pull-up 10k si module sans PCB)
+  - DHT11 / DHT22 : VCC -> 3.3V, GND -> GND, DATA -> GPIO 4 (avec résistance
+  pull-up 10k si module sans PCB)
   - Capteur Gaz   : VCC -> 5V (VIN), GND -> GND, AOUT -> GPIO 34 (ADC1)
   - Capteur Eau   : VCC -> 3.3V, GND -> GND, SIG -> GPIO 35 (ADC1)
-  - Servomoteur   : Rouge -> 5V (VIN ou alim 5V externe), Marron/Noir -> GND, Jaune/Orange -> GPIO 18
-  - LED Alerte    : Anode (+) -> Résistance 220-330Ω -> GPIO 5, Cathode (-) -> GND
+  - Servomoteur   : Rouge -> 5V (VIN ou alim 5V externe), Marron/Noir -> GND,
+  Jaune/Orange -> GPIO 18
+  - LED Alerte    : Anode (+) -> Résistance 220-330Ω -> GPIO 5, Cathode (-) ->
+  GND
 
   NOTE SUR LA CAMÉRA :
-  ⚠️ La caméra OV2640 NE DOIT PAS être branchée sur cette carte ESP32 standard (manque de broches et pas de PSRAM).
-  Utilisez une carte dédiée "AI-Thinker ESP32-CAM" programmée avec le fichier "esp32_cam.ino".
-  Les deux ESP32 se synchronisent automatiquement via le WiFi et votre tableau de bord web !
+  ⚠️ La caméra OV2640 NE DOIT PAS être branchée sur cette carte ESP32 standard
+  (manque de broches et pas de PSRAM). Utilisez une carte dédiée "AI-Thinker
+  ESP32-CAM" programmée avec le fichier "esp32_cam.ino". Les deux ESP32 se
+  synchronisent automatiquement via le WiFi et votre tableau de bord web !
   ====================================================================================
 */
 
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include <WiFiClientSecure.h>
-#include <PubSubClient.h>
-#include <ArduinoJson.h>
 #include "DHT.h"
+#include <ArduinoJson.h>
 #include <ESP32Servo.h>
+#include <HTTPClient.h>
+#include <PubSubClient.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
 
 // ====================================================================================
 // 1. CONFIGURATION RÉSEAU, HTTP ET BROKER MQTT
 // ====================================================================================
 
-// Renseignez ici le nom (SSID) et le mot de passe de votre box Internet ou point d'accès WiFi (2.4 GHz uniquement)
-const char* WIFI_SSID     = "eliotness9000";
-const char* WIFI_PASSWORD = "adem2005KAIS";
+// Renseignez ici le nom (SSID) et le mot de passe de votre box Internet ou
+// point d'accès WiFi (2.4 GHz uniquement)
+const char *WIFI_SSID = "Iphone";
+const char *WIFI_PASSWORD = "12345669";
 
-// Adresse IP de votre ordinateur exécutant le serveur SensorHub (détectée : 192.168.1.13)
-const char* SERVER_IP     = "192.168.1.13";
-const int   HTTP_PORT     = 3001;
-const int   MQTT_PORT     = 1883;
+// Adresse du serveur SensorHub hébergé sur Render (cloud)
+const char *SERVER_IP = "sensorhub-projet.onrender.com";
+const int HTTP_PORT = 443;
+const int MQTT_PORT = 1883;
 
-// URL HTTP complète pour les envois REST
-const char* SERVER_URL    = "http://192.168.1.13:3001";
+// URL HTTPS complète pour les envois REST (hébergement cloud Render)
+const char *SERVER_URL = "https://sensorhub-projet.onrender.com";
 
-// Clé API de sécurité (doit correspondre à DEFAULT_API_KEY ou à la clé de l'appareil dans SensorHub)
-const char* API_KEY       = "esp32-secret-key-123456";
+// Clé API de sécurité (doit correspondre à DEFAULT_API_KEY ou à la clé de
+// l'appareil dans SensorHub)
+const char *API_KEY = "esp32-secret-key-123456";
 
-// Identifiant unique de cet appareil (doit correspondre à l'enregistrement dans la table devices)
-const char* DEVICE_NAME   = "esp32-01";
+// Identifiant unique de cet appareil (doit correspondre à l'enregistrement dans
+// la table devices)
+const char *DEVICE_NAME = "esp32-01";
 
-// Commutateurs de protocoles (vous pouvez activer l'un, l'autre ou LES DEUX en même temps)
-bool ENABLE_MQTT          = true;   // Active MQTT (commandes instantanées < 20ms sans latence)
-bool ENABLE_HTTP          = true;   // Active HTTP (compatibilité REST et secours)
+// Commutateurs de protocoles
+// NOTE : MQTT désactivé car Render ne supporte pas le port TCP 1883 sur le plan
+// gratuit L'ESP32 utilise uniquement HTTP pour envoyer les données et recevoir
+// les commandes
+bool ENABLE_MQTT =
+    false; // MQTT désactivé (cloud Render - port 1883 non disponible)
+bool ENABLE_HTTP =
+    true; // HTTP activé (envoi données + réception commandes via polling)
 
 // Sujets (Topics) MQTT pour cet appareil
-const char* MQTT_TOPIC_DATA     = "sensorhub/esp32-01/data";      // Envoi des mesures
-const char* MQTT_TOPIC_COMMANDS = "sensorhub/esp32-01/commands";  // Réception instantanée des ordres
-const char* MQTT_TOPIC_STATUS   = "sensorhub/esp32-01/status";    // En ligne / Hors ligne (LWT)
+const char *MQTT_TOPIC_DATA = "sensorhub/esp32-01/data"; // Envoi des mesures
+const char *MQTT_TOPIC_COMMANDS =
+    "sensorhub/esp32-01/commands"; // Réception instantanée des ordres
+const char *MQTT_TOPIC_STATUS =
+    "sensorhub/esp32-01/status"; // En ligne / Hors ligne (LWT)
 
 // ====================================================================================
 // 2. AFFECTATION DES BROCHES (GPIO) ET SEUILS PHYSIQUES
 // ====================================================================================
-#define DHTPIN        4       // Broche de données du capteur DHT
-#define DHTTYPE       DHT11   // Type de capteur : DHT11 (remplacez par DHT22 si vous utilisez un DHT22 blanc)
-#define GAS_PIN       34      // Entrée analogique du capteur de gaz MQ (ADC1)
-#define WATER_PIN     35      // Entrée analogique du capteur d'eau / pluie (ADC1)
-#define SERVO_PIN     18      // Broche de commande PWM du servomoteur
-#define LED_PIN       5       // Broche de commande de la LED d'alerte
+#define DHTPIN 4 // Broche de données du capteur DHT
+#define DHTTYPE                                                                \
+  DHT11 // Type de capteur : DHT11 (remplacez par DHT22 si vous utilisez un
+        // DHT22 blanc)
+#define GAS_PIN 34   // Entrée analogique du capteur de gaz MQ (ADC1)
+#define WATER_PIN 35 // Entrée analogique du capteur d'eau / pluie (ADC1)
+#define SERVO_PIN 18 // Broche de commande PWM du servomoteur
+#define LED_PIN 5    // Broche de commande de la LED d'alerte
 
 // Seuils de déclenchement d'alerte matérielle
-const int THRESHOLD_GAS   = 2000; // Alerte si valeur brute ADC > 2000 (sur 4095)
-const int THRESHOLD_WATER = 1000; // Alerte si valeur brute ADC > 1000 (détection d'eau)
+const int THRESHOLD_GAS = 2000; // Alerte si valeur brute ADC > 2000 (sur 4095)
+const int THRESHOLD_WATER =
+    1000; // Alerte si valeur brute ADC > 1000 (détection d'eau)
 
 // ====================================================================================
 // 3. VARIABLES GLOBALES, CLIENTS RÉSEAU ET ACTIONNEURS
@@ -92,21 +112,26 @@ Servo valveServo;
 WiFiClient espClient;
 PubSubClient mqttClient(espClient);
 
-int currentServoAngle        = 0;     // Angle courant du servo (0° = Vanne fermée, 90° = Mi-ouvert, 180° = Ouvert)
-bool autoCloseValveOnAlert   = true;  // Sécurité automatique : ferme la vanne en cas d'alerte fuite d'eau ou gaz
+int currentServoAngle = 0; // Angle courant du servo (0° = Vanne fermée, 90° =
+                           // Mi-ouvert, 180° = Ouvert)
+bool autoCloseValveOnAlert = true; // Sécurité automatique : ferme la vanne en
+                                   // cas d'alerte fuite d'eau ou gaz
 
-unsigned long lastSendTime   = 0;
+unsigned long lastSendTime = 0;
 const unsigned long SEND_INTERVAL = 5000; // Intervalle d'émission : 5 secondes
 
-unsigned long lastMqttRetry  = 0;
-const unsigned long MQTT_RETRY_INTERVAL = 5000; // Reconnexion MQTT toutes les 5s max en cas de déconnexion
+unsigned long lastMqttRetry = 0;
+const unsigned long MQTT_RETRY_INTERVAL =
+    5000; // Reconnexion MQTT toutes les 5s max en cas de déconnexion
 
 // Gestion du clignotement de la LED sans délai bloquant
-unsigned long lastBlinkTime  = 0;
-const unsigned long BLINK_INTERVAL = 400; // Clignote toutes les 400 ms en alerte
-bool ledState                = false;
-bool isAlertActive           = false;
-bool manualLedOverride       = false; // Si l'utilisateur a forcé la LED via le dashboard
+unsigned long lastBlinkTime = 0;
+const unsigned long BLINK_INTERVAL =
+    400; // Clignote toutes les 400 ms en alerte
+bool ledState = false;
+bool isAlertActive = false;
+bool manualLedOverride =
+    false; // Si l'utilisateur a forcé la LED via le dashboard
 
 // ====================================================================================
 // 4. FONCTION UNIFIÉE D'EXÉCUTION DES COMMANDES (APPELÉE PAR HTTP ET MQTT)
@@ -116,10 +141,15 @@ void executeCommand(String action, JsonVariant params) {
   Serial.println(action);
 
   if (action == "test_led" || action == "toggle_led") {
-    manualLedOverride = !manualLedOverride;
-    digitalWrite(LED_PIN, manualLedOverride ? HIGH : LOW);
-    Serial.print("[ACTION] LED forcée à : ");
-    Serial.println(manualLedOverride ? "ALLUMÉE" : "ÉTEINTE");
+    Serial.println("[ACTION] Test de la LED 5 demandé : clignotement de test 3s...");
+    for (int i = 0; i < 4; i++) {
+      digitalWrite(LED_PIN, HIGH);
+      delay(300);
+      digitalWrite(LED_PIN, LOW);
+      delay(300);
+    }
+    digitalWrite(LED_PIN, LOW); // Assure que la LED 5 reste éteinte après le test
+    manualLedOverride = false;
   } else if (action == "alarm_test") {
     Serial.println("[ACTION] Test alarme déclenché (clignotement rapide 3s)");
     for (int i = 0; i < 6; i++) {
@@ -128,6 +158,8 @@ void executeCommand(String action, JsonVariant params) {
       digitalWrite(LED_PIN, LOW);
       delay(250);
     }
+    digitalWrite(LED_PIN, LOW); // Assure que la LED 5 reste éteinte après le test
+    manualLedOverride = false;
   } else if (action == "servo_set" || action == "set_servo") {
     int targetAngle = 0;
     if (params.is<JsonObject>() && params.containsKey("angle")) {
@@ -137,7 +169,8 @@ void executeCommand(String action, JsonVariant params) {
     }
     currentServoAngle = constrain(targetAngle, 0, 180);
     valveServo.write(currentServoAngle);
-    Serial.printf("[ACTION] Servomoteur positionné à : %d°\n", currentServoAngle);
+    Serial.printf("[ACTION] Servomoteur positionné à : %d°\n",
+                  currentServoAngle);
   } else if (action == "servo_open" || action == "open_valve") {
     currentServoAngle = 180;
     valveServo.write(currentServoAngle);
@@ -156,7 +189,7 @@ void executeCommand(String action, JsonVariant params) {
 // ====================================================================================
 // 5. CALLBACK MQTT : RÉCEPTION INSTANTANÉE DES ORDRES (< 20ms)
 // ====================================================================================
-void mqttCallback(char* topic, byte* payload, unsigned int length) {
+void mqttCallback(char *topic, byte *payload, unsigned int length) {
   String message;
   for (unsigned int i = 0; i < length; i++) {
     message += (char)payload[i];
@@ -181,10 +214,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 // 6. CONNEXION ET RECONNEXION AU BROKER MQTT (AVEC LWT - LAST WILL & TESTAMENT)
 // ====================================================================================
 void reconnectMQTT() {
-  if (mqttClient.connected()) return;
+  if (mqttClient.connected())
+    return;
 
   unsigned long now = millis();
-  if (now - lastMqttRetry < MQTT_RETRY_INTERVAL) return;
+  if (now - lastMqttRetry < MQTT_RETRY_INTERVAL)
+    return;
   lastMqttRetry = now;
 
   Serial.print("[MQTT] Connexion au broker ");
@@ -193,9 +228,11 @@ void reconnectMQTT() {
   Serial.print(MQTT_PORT);
   Serial.print("... ");
 
-  // Configuration du LWT (Last Will & Testament) : Si l'ESP32 est déconnecté brusquement,
-  // le broker publie automatiquement "offline" sur sensorhub/esp32-01/status
-  if (mqttClient.connect(DEVICE_NAME, DEVICE_NAME, API_KEY, MQTT_TOPIC_STATUS, 1, true, "offline")) {
+  // Configuration du LWT (Last Will & Testament) : Si l'ESP32 est déconnecté
+  // brusquement, le broker publie automatiquement "offline" sur
+  // sensorhub/esp32-01/status
+  if (mqttClient.connect(DEVICE_NAME, DEVICE_NAME, API_KEY, MQTT_TOPIC_STATUS,
+                         1, true, "offline")) {
     Serial.println("Connecté avec succès !");
 
     // Publier le statut en ligne
@@ -216,7 +253,8 @@ void reconnectMQTT() {
 // 7. FONCTION DE CONNEXION AU WIFI AVEC RECONNEXION AUTOMATIQUE
 // ====================================================================================
 void connectWiFi() {
-  if (WiFi.status() == WL_CONNECTED) return;
+  if (WiFi.status() == WL_CONNECTED)
+    return;
 
   Serial.println();
   Serial.print("[WiFi] Connexion au réseau : ");
@@ -236,14 +274,16 @@ void connectWiFi() {
     Serial.print("[WiFi] Adresse IP locale de l'ESP32 : ");
     Serial.println(WiFi.localIP());
   } else {
-    Serial.println("\n[WiFi] Échec de la connexion. Nouvelle tentative au prochain cycle.");
+    Serial.println("\n[WiFi] Échec de la connexion. Nouvelle tentative au "
+                   "prochain cycle.");
   }
 }
 
 // ====================================================================================
 // 8. ENVOI DES MESURES (HYBRIDE MQTT + HTTP)
 // ====================================================================================
-void sendSensorData(float temp, float hum, int gas, int water, bool alert, int servoAngle) {
+void sendSensorData(float temp, float hum, int gas, int water, bool alert,
+                    int servoAngle) {
   if (WiFi.status() != WL_CONNECTED) {
     Serial.println("[RÉSEAU] WiFi non connecté, abandon de l'envoi.");
     return;
@@ -251,13 +291,13 @@ void sendSensorData(float temp, float hum, int gas, int water, bool alert, int s
 
   // Construction du JSON avec ArduinoJson
   StaticJsonDocument<300> doc;
-  doc["device"]      = DEVICE_NAME;
+  doc["device"] = DEVICE_NAME;
   doc["temperature"] = serialized(String(temp, 1));
-  doc["humidity"]    = round(hum);
-  doc["gas"]         = gas;
-  doc["water"]       = water;
+  doc["humidity"] = round(hum);
+  doc["gas"] = gas;
+  doc["water"] = water;
   doc["servo_angle"] = servoAngle;
-  doc["alert"]       = alert;
+  doc["alert"] = alert;
 
   String requestBody;
   serializeJson(doc, requestBody);
@@ -280,7 +320,8 @@ void sendSensorData(float temp, float hum, int gas, int water, bool alert, int s
 
     WiFiClientSecure secureClient;
     if (String(SERVER_URL).startsWith("https://")) {
-      secureClient.setInsecure(); // Accepte les connexions HTTPS (Render, etc.) sans certificat strict
+      secureClient.setInsecure(); // Accepte les connexions HTTPS (Render, etc.)
+                                  // sans certificat strict
       http.begin(secureClient, url);
     } else {
       http.begin(url);
@@ -309,14 +350,17 @@ void sendSensorData(float temp, float hum, int gas, int water, bool alert, int s
 // 9. RÉCUPÉRATION DES COMMANDES EN HTTP (POLLING SECOURS)
 // ====================================================================================
 void checkPendingCommandsHTTP() {
-  if (WiFi.status() != WL_CONNECTED) return;
+  if (WiFi.status() != WL_CONNECTED)
+    return;
 
   HTTPClient http;
-  String url = String(SERVER_URL) + "/api/commands/pending?device=" + String(DEVICE_NAME);
+  String url = String(SERVER_URL) +
+               "/api/commands/pending?device=" + String(DEVICE_NAME);
 
   WiFiClientSecure secureClient;
   if (String(SERVER_URL).startsWith("https://")) {
-    secureClient.setInsecure(); // Accepte les connexions HTTPS (Render, etc.) sans certificat strict
+    secureClient.setInsecure(); // Accepte les connexions HTTPS (Render, etc.)
+                                // sans certificat strict
     http.begin(secureClient, url);
   } else {
     http.begin(url);
@@ -370,10 +414,14 @@ void setup() {
   Serial.println("[CAPTEUR] DHT11 initialisé sur GPIO 4.");
 
   // Initialisation du Servomoteur sur GPIO 18
-  valveServo.setPeriodHertz(50);              // Fréquence standard 50 Hz pour servo analogique / numérique
-  valveServo.attach(SERVO_PIN, 500, 2400);    // Impulsions min: 500µs, max: 2400µs (couvre 0-180°)
-  valveServo.write(currentServoAngle);        // Position de départ (0° - Fermé)
-  Serial.printf("[ACTIONNEUR] Servomoteur attaché sur GPIO %d (Position initiale: %d°).\n", SERVO_PIN, currentServoAngle);
+  valveServo.setPeriodHertz(
+      50); // Fréquence standard 50 Hz pour servo analogique / numérique
+  valveServo.attach(SERVO_PIN, 500,
+                    2400); // Impulsions min: 500µs, max: 2400µs (couvre 0-180°)
+  valveServo.write(currentServoAngle); // Position de départ (0° - Fermé)
+  Serial.printf("[ACTIONNEUR] Servomoteur attaché sur GPIO %d (Position "
+                "initiale: %d°).\n",
+                SERVO_PIN, currentServoAngle);
 
   // Connexion WiFi
   connectWiFi();
@@ -398,7 +446,8 @@ void loop() {
     connectWiFi();
   }
 
-  // 2. Gestion et écoute permanente MQTT (commandes instantanées reçues en < 20ms)
+  // 2. Gestion et écoute permanente MQTT (commandes instantanées reçues en <
+  // 20ms)
   if (ENABLE_MQTT && WiFi.status() == WL_CONNECTED) {
     if (!mqttClient.connected()) {
       reconnectMQTT();
@@ -435,31 +484,45 @@ void loop() {
     }
 
     // Lecture analogique du capteur de gaz MQ et du capteur d'eau
-    int gasValue   = analogRead(GAS_PIN);
+    int gasValue = analogRead(GAS_PIN);
     int waterValue = analogRead(WATER_PIN);
 
     // Détermination de l'état d'alerte selon les seuils matériels
-    isAlertActive = (gasValue > THRESHOLD_GAS) || (waterValue > THRESHOLD_WATER);
+    isAlertActive =
+        (gasValue > THRESHOLD_GAS) || (waterValue > THRESHOLD_WATER);
 
     // Sécurité automatique hydraulique / gaz : fermeture d'urgence de la vanne
     if (isAlertActive && autoCloseValveOnAlert && currentServoAngle != 0) {
-      Serial.println("🚨 [SÉCURITÉ] Alerte fuite/gaz détectée ! Fermeture d'urgence de la vanne (Servo -> 0°)...");
+      Serial.println("🚨 [SÉCURITÉ] Alerte fuite/gaz détectée ! Fermeture "
+                     "d'urgence de la vanne (Servo -> 0°)...");
       currentServoAngle = 0;
       valveServo.write(currentServoAngle);
     }
 
     // Affichage dans le moniteur série
     Serial.println("--------------------------------------------------------");
-    Serial.print("Température : "); Serial.print(temperature, 1); Serial.print(" °C | ");
-    Serial.print("Humidité : "); Serial.print(humidity, 0); Serial.println(" %");
-    Serial.print("Gaz MQ      : "); Serial.print(gasValue); Serial.print(" / 4095 | ");
-    Serial.print("Eau         : "); Serial.print(waterValue); Serial.println(" / 4095");
-    Serial.print("Servo Vanne : "); Serial.print(currentServoAngle); Serial.println("°");
-    Serial.print("Alerte      : "); Serial.println(isAlertActive ? "OUI (LED clignotante)" : "NON");
+    Serial.print("Température : ");
+    Serial.print(temperature, 1);
+    Serial.print(" °C | ");
+    Serial.print("Humidité : ");
+    Serial.print(humidity, 0);
+    Serial.println(" %");
+    Serial.print("Gaz MQ      : ");
+    Serial.print(gasValue);
+    Serial.print(" / 4095 | ");
+    Serial.print("Eau         : ");
+    Serial.print(waterValue);
+    Serial.println(" / 4095");
+    Serial.print("Servo Vanne : ");
+    Serial.print(currentServoAngle);
+    Serial.println("°");
+    Serial.print("Alerte      : ");
+    Serial.println(isAlertActive ? "OUI (LED clignotante)" : "NON");
     Serial.println("--------------------------------------------------------");
 
     // Envoi des données (publie en MQTT et/ou POST HTTP)
-    sendSensorData(temperature, humidity, gasValue, waterValue, isAlertActive, currentServoAngle);
+    sendSensorData(temperature, humidity, gasValue, waterValue, isAlertActive,
+                   currentServoAngle);
 
     // Si MQTT est désactivé ou déconnecté, vérification de secours en HTTP
     if (!ENABLE_MQTT || !mqttClient.connected()) {

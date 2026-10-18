@@ -34,10 +34,11 @@
 #include "esp_http_server.h"
 
 // ====================================================================================
-// 1. VOS IDENTIFIANTS WIFI (2.4 GHz)
+// 1. VOS IDENTIFIANTS WIFI (2.4 GHz uniquement)
 // ====================================================================================
-const char* ssid     = "eliotness9000";
-const char* password = "adem2005KAIS";
+// Doit être sur le même réseau WiFi que l'ESP32 principal et votre PC/téléphone
+const char* ssid     = "Iphone";
+const char* password = "12345669";
 
 // ====================================================================================
 // 2. AFFECTATION DES BROCHES DU MODÈLE AI-THINKER ESP32-CAM

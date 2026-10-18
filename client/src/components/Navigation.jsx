@@ -11,11 +11,12 @@ import {
   Menu,
   X,
   Radio,
-  Download
+  Download,
+  Lock
 } from 'lucide-react';
 
 export default function Navigation({ currentPage, setCurrentPage }) {
-  const { activeAlertsCount, activeDevice } = useApp();
+  const { activeAlertsCount, activeDevice, isSecurityUnlocked } = useApp();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const navItems = [
@@ -84,6 +85,9 @@ export default function Navigation({ currentPage, setCurrentPage }) {
                     <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-rose-500 text-white shadow-sm">
                       {item.badge}
                     </span>
+                  )}
+                  {item.id === 'camera' && !isSecurityUnlocked && (
+                    <Lock className="w-3.5 h-3.5 text-slate-400" />
                   )}
                 </button>
               );

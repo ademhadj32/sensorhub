@@ -257,12 +257,20 @@ router.put('/config', (req, res) => {
 // 6. COMMANDES POUR L'ESP32
 // ==========================================
 
-// POST /api/commands : envoi d'une commande (ex: tester la LED, clignoter alerte, etc.)
+// POST /api/commands : envoi d'une commande (ex: tester la LED, clignoter alerte, servomoteur)
 router.post('/commands', (req, res) => {
-  const { device_id, command, params } = req.body;
+  const { device_id, command, params, password } = req.body;
 
   if (!device_id || !command) {
     return res.status(400).json({ error: 'device_id et command sont obligatoires' });
+  }
+
+  // Protection de sécurité par mot de passe (ademadem) pour les commandes sensibles
+  const protectedCommands = ['test_led', 'toggle_led', 'alarm_test', 'servo_set', 'servo_open', 'servo_close', 'reboot'];
+  if (protectedCommands.includes(command)) {
+    if (password !== 'ademadem') {
+      return res.status(403).json({ error: 'Accès refusé : mot de passe requis (ademadem)' });
+    }
   }
 
   const paramsStr = params ? (typeof params === 'string' ? params : JSON.stringify(params)) : null;

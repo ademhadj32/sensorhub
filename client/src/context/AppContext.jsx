@@ -31,6 +31,59 @@ export function AppProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const eventSourceRef = useRef(null);
 
+  // Sécurité & Protection mot de passe (ademadem)
+  const [isSecurityUnlocked, setIsSecurityUnlocked] = useState(() => {
+    return sessionStorage.getItem('sensorhub_sec_unlocked') === 'true';
+  });
+  const [securityModalState, setSecurityModalState] = useState({
+    isOpen: false,
+    actionTitle: 'Accès Protégé',
+    onConfirm: null
+  });
+
+  const unlockSecurity = useCallback(() => {
+    setIsSecurityUnlocked(true);
+    sessionStorage.setItem('sensorhub_sec_unlocked', 'true');
+    addToast({
+      title: '🔓 Contrôle Déverrouillé',
+      message: 'Accès autorisé aux commandes matérielles et à la caméra.',
+      type: 'success'
+    });
+  }, [addToast]);
+
+  const lockSecurity = useCallback(() => {
+    setIsSecurityUnlocked(false);
+    sessionStorage.removeItem('sensorhub_sec_unlocked');
+    addToast({
+      title: '🔒 Sécurité Verrouillée',
+      message: 'Les commandes et la caméra sont de nouveau protégées.',
+      type: 'info'
+    });
+  }, [addToast]);
+
+  const openSecurityModal = useCallback((actionTitle, onConfirm) => {
+    if (isSecurityUnlocked) {
+      if (typeof onConfirm === 'function') onConfirm();
+      return;
+    }
+    setSecurityModalState({
+      isOpen: true,
+      actionTitle: actionTitle || 'Accès Protégé',
+      onConfirm: typeof onConfirm === 'function' ? onConfirm : null
+    });
+  }, [isSecurityUnlocked]);
+
+  const closeSecurityModal = useCallback(() => {
+    setSecurityModalState(prev => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const handleSecuritySuccess = useCallback(() => {
+    unlockSecurity();
+    if (typeof securityModalState.onConfirm === 'function') {
+      securityModalState.onConfirm();
+    }
+  }, [unlockSecurity, securityModalState]);
+
   // Gestion de la classe Dark sur HTML
   useEffect(() => {
     if (theme === 'dark') {
@@ -326,12 +379,35 @@ export function AppProvider({ children }) {
     }
   };
 
+  // Vérification continue de l'état En Ligne / Hors Ligne (détection rapide en 3-5 secondes)
+  useEffect(() => {
+    const offlineChecker = setInterval(() => {
+      setDevices(prev =>
+        prev.map(d => {
+          if (!d.last_seen) {
+            return d.is_online ? { ...d, is_online: false } : d;
+          }
+          const lastSeenDate = new Date(d.last_seen.endsWith('Z') ? d.last_seen : d.last_seen + 'Z');
+          const diffSeconds = Math.max(0, Math.floor((Date.now() - lastSeenDate.getTime()) / 1000));
+          const threshold = parseInt(systemSettings?.offline_threshold_seconds, 10) || 20;
+          const isNowOnline = diffSeconds <= threshold;
+          if (d.is_online !== isNowOnline || d.seconds_since_last_seen !== diffSeconds) {
+            return { ...d, is_online: isNowOnline, seconds_since_last_seen: diffSeconds };
+          }
+          return d;
+        })
+      );
+    }, 2000);
+
+    return () => clearInterval(offlineChecker);
+  }, [systemSettings]);
+
   const sendCommand = async (deviceId, command, params = null) => {
     try {
       const res = await fetch('/api/commands', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ device_id: deviceId, command, params })
+        body: JSON.stringify({ device_id: deviceId, command, params, password: 'ademadem' })
       });
       if (res.ok) {
         return true;
@@ -405,7 +481,15 @@ export function AppProvider({ children }) {
         acknowledgeAllAlerts,
         sendCommand,
         addDevice,
-        updateConfig
+        updateConfig,
+        // Sécurité & Protection mot de passe (ademadem)
+        isSecurityUnlocked,
+        unlockSecurity,
+        lockSecurity,
+        securityModalState,
+        openSecurityModal,
+        closeSecurityModal,
+        handleSecuritySuccess
       }}
     >
       {children}

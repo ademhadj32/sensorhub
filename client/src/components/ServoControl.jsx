@@ -8,11 +8,19 @@ import {
   Power,
   Check,
   Disc,
-  ArrowUpRight
+  ArrowUpRight,
+  Lock
 } from 'lucide-react';
 
 export default function ServoControl({ compact = false }) {
-  const { latestReadings, activeDevice, sendCommand, addToast } = useApp();
+  const {
+    latestReadings,
+    activeDevice,
+    sendCommand,
+    addToast,
+    openSecurityModal,
+    isSecurityUnlocked
+  } = useApp();
 
   // Angle lu depuis l'ESP32 en temps réel (si disponible)
   const serverAngle = latestReadings['servo_angle']?.value;
@@ -28,7 +36,7 @@ export default function ServoControl({ compact = false }) {
     }
   }, [serverAngle, isSending]);
 
-  const handleApplyAngle = async (targetAngle) => {
+  const executeApplyAngle = async (targetAngle) => {
     if (!activeDevice?.id) {
       addToast({
         title: 'Aucun appareil sélectionné',
@@ -56,6 +64,10 @@ export default function ServoControl({ compact = false }) {
       });
     }
     setTimeout(() => setIsSending(false), 800);
+  };
+
+  const handleApplyAngle = (targetAngle) => {
+    openSecurityModal('Manoeuvre de la Vanne Hydraulique', () => executeApplyAngle(targetAngle));
   };
 
   const getStatusLabel = (deg) => {
@@ -97,9 +109,17 @@ export default function ServoControl({ compact = false }) {
           </div>
         </div>
 
-        <span className={`px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${getStatusColor(sliderAngle)}`}>
-          {getStatusLabel(sliderAngle)}
-        </span>
+        <div className="flex items-center gap-2">
+          {!isSecurityUnlocked && (
+            <span className="flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-amber-500/10 text-amber-500 border border-amber-500/20">
+              <Lock className="w-3 h-3" />
+              Protégé
+            </span>
+          )}
+          <span className={`px-2.5 py-1 rounded-full text-xs font-bold border transition-all ${getStatusColor(sliderAngle)}`}>
+            {getStatusLabel(sliderAngle)}
+          </span>
+        </div>
       </div>
 
       {/* 2. VISUALISATION DU DIAL / VANNE ET SLIDER */}

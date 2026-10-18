@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
-import { AppProvider } from './context/AppContext';
+import { AppProvider, useApp } from './context/AppContext';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import Toasts from './components/Toasts';
+import SecurityModal from './components/SecurityModal';
 
 // Pages
 import Dashboard from './pages/Dashboard';
@@ -15,11 +16,20 @@ import Solar from './pages/Solar';
 
 function MainLayout() {
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const { securityModalState, closeSecurityModal, handleSecuritySuccess } = useApp();
 
   return (
     <div className="min-h-screen flex flex-col md:flex-row bg-slate-50 dark:bg-[#0a0f1d] text-slate-800 dark:text-slate-100 selection:bg-cyan-500 selection:text-white">
       {/* Système global de Toasts */}
       <Toasts />
+
+      {/* Modal de protection par mot de passe (ademadem) */}
+      <SecurityModal
+        isOpen={securityModalState.isOpen}
+        actionTitle={securityModalState.actionTitle}
+        onClose={closeSecurityModal}
+        onSuccess={handleSecuritySuccess}
+      />
 
       {/* Navigation latérale Desktop / Barre basse Mobile */}
       <Navigation currentPage={currentPage} setCurrentPage={setCurrentPage} />
